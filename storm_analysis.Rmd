@@ -1,0 +1,81 @@
+---
+title: "Most Damaging Storms in USA (based on NOAA Storm Database)"
+author: "Rafael Tartalia"
+date: "12/27/2015"
+output: html_document
+---
+This report analyzes the most damaging storms in USA, in respect to most harmful to population health and with greatest economic consequences to the country.
+This analyzes is simple, and only utilize descriptive statistics based in the NOAA Storm Database, publicly available through https://data.noaa.gov/dataset/ncdc-storm-events-database.
+
+To analyze the most damaging storms in USA, this report utilize storm types (event sources), the number of fatalities and injuries, and property damage values.
+
+To do a better analyze, would be great to analyze how the damages changed over the years by event source (this work didn't consider this variable in the analysis), since the damages could be changed over the years due to improvements in engineering and monitoring systems to alert tornadoes, for example.
+
+## Data Processing
+
+The NOAA provide de storm database through a CSV file, loaded by this report to do the analysis.
+
+The following libraries are used in the analysis.
+
+```{r}
+library(dplyr, quietly = TRUE, verbose = FALSE, warn.conflicts = FALSE)
+library(ggplot2)
+library(scales)
+```
+
+```{r cache = TRUE}
+storms <- read.csv('repdata-data-StormData.csv', header=TRUE, comment.char="")
+```
+
+### Computation of Fatalities and Injuries by Event Source
+
+This computation sums all fatalities and injuries occurred allong the years by event source, and select the top 20 events sources by number of fatalities and injuries.
+
+```{r}
+healthDamageByEventType <-summarise(group_by(storms, EVTYPE), totalFatalities = sum(FATALITIES), totalInjuries = sum(INJURIES))
+healthDamageByEventType <- filter(healthDamageByEventType, totalFatalities != 0, totalInjuries != 0)
+topFatalities <- slice(arrange(healthDamageByEventType, desc(totalFatalities)), 1:10)
+topInjuries <- slice(arrange(healthDamageByEventType, desc(totalInjuries)), 1:10)
+```
+
+
+### Computation of the Greatest Economic Consequences by Event Source
+
+This computation select only events with economic consequences, and compute the real value of the damage, since the real value can not be obtained only selecting the property damage value. Is necessary verify if the the damage was in million or thousand order. After that, the computation selects the top 20 damages by event source.
+
+```{r}
+storms$PROPDMGEXP <- tolower(as.character(storms$PROPDMGEXP))
+stormDamage <- filter(select(storms, EVTYPE, PROPDMG, PROPDMGEXP), PROPDMG > 0)
+stormDamage <- mutate(stormDamage, realDamage = ifelse(PROPDMGEXP == "k", PROPDMG * 1000, PROPDMG * 1000000))
+
+damagesByEventType <- summarise(group_by(stormDamage, EVTYPE), totalDamage = sum(realDamage))
+topDamages <- slice(arrange(damagesByEventType, desc(totalDamage)), 1:20)
+```
+
+
+## Results
+
+By analyzing the graphs, we can see that TORNADO, EXCESSIVE HEAT, and FLASH FLOOD are the events sources which caused most fatalities in USA, followed by HEAT and LIGHTNING.
+
+```{r}
+topFatalitiesGraph <- ggplot(topFatalities, aes(x = reorder(EVTYPE, totalFatalities) , y = totalFatalities))
+topFatalitiesGraph + geom_bar(stat = "identity", width = .5) + coord_flip() + xlab("Event Type") + ylab("Total Fatalities") + ggtitle("Fatalities By Event Source (Top 10)")
+```
+
+When analyzing injuries, we can see that TORNADO, TUNDERSTORM WIND, FLOOD, EXCESSIVE HEAT and LIGHTNING, are the event sources which caused most injuries in the USA.
+
+```{r}
+topInjuriesGraph <- ggplot(topInjuries, aes(x = reorder(EVTYPE, totalInjuries) , y = totalInjuries))
+topInjuriesGraph + geom_bar(stat = "identity", width = .5) + coord_flip() + xlab("Event Type") + ylab("Total Injuries") + ggtitle("Injuries By Event Source (Top 10)")
+```
+
+It's worth of mention that indirect fatalities and injuries are not computed in the analysis (see NOAA documentation).
+
+Analyzing the damages in economics, we can see again that TORNADO is the top offender, followed by FLOOD, FLASH FLOOD, HAIL, and THUNDERSTORM WINDS.
+
+```{r fig.width = 10}
+topDamagesGraph <- ggplot(topDamages, aes(x = reorder(EVTYPE, totalDamage) , y = totalDamage))
+topDamagesGraph + geom_bar(stat = "identity", width = .5) + coord_flip() + scale_y_continuous(labels = comma) + xlab("Event Type") + ylab("Total Damage ($)") + ggtitle("Damages By Event Source (Top 20)")
+```
+
+Therefore, accordingly to the analysis, we can conclude that TORNADO is the most damage event source, in fatalities, injuries, and property damages.
